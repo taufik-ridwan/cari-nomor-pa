@@ -4,16 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cari Nomor PA</title>
-    <!-- Tailwind CSS for Professional Styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS for Excel Processing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Progress bar animation */
+        @keyframes progress-stripe {
+            from { background-position: 40px 0; }
+            to   { background-position: 0 0; }
+        }
+        .progress-bar-animated {
+            background-image: linear-gradient(
+                45deg,
+                rgba(255,255,255,.15) 25%, transparent 25%,
+                transparent 50%, rgba(255,255,255,.15) 50%,
+                rgba(255,255,255,.15) 75%, transparent 75%, transparent
+            );
+            background-size: 40px 40px;
+            animation: progress-stripe 1s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen font-sans text-slate-800">
@@ -27,7 +39,7 @@
 
         <!-- Main Input Card -->
         <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden mb-8">
-            
+
             <!-- Step 1: File Upload -->
             <div class="p-5 border-b border-slate-100 bg-slate-50/50">
                 <label class="block text-sm font-semibold text-slate-700 mb-3">1. Upload File Excel (Bisa pilih lebih dari satu)</label>
@@ -41,23 +53,66 @@
                         hover:file:bg-blue-200 cursor-pointer transition-all focus:outline-none"
                     />
                 </div>
+
+                <!-- Status box -->
                 <div id="fileStatus" class="mt-3 px-4 py-2.5 rounded-md text-sm font-medium hidden">
                     <span id="fileStatusText"></span>
                 </div>
+
+                <!-- Per-file progress list -->
+                <div id="progressList" class="mt-3 space-y-2 hidden"></div>
             </div>
 
-            <!-- Step 2: Search Input (Now supports multi-line / multiple RM) -->
+            <!-- Step 2: Extract from MDT message -->
+            <div class="p-5 border-b border-slate-100 bg-slate-50/50">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="block text-sm font-semibold text-slate-700">2. Ekstrak Nomor RM dari Pesan WA <span class="text-slate-400 font-normal">(opsional)</span></label>
+                    <button onclick="toggleExtractor()"
+                        id="extractorToggle"
+                        class="text-xs text-blue-600 hover:text-blue-800 font-medium underline underline-offset-2">
+                        Tampilkan
+                    </button>
+                </div>
+
+                <div id="extractorPanel" class="hidden space-y-3">
+                    <textarea id="mdtMessage" rows="6"
+                        placeholder="Paste the messages here..."
+                        class="w-full rounded-md border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all shadow-sm resize-y"
+                    ></textarea>
+
+                    <!-- Preview of extracted RMs -->
+                    <div id="extractPreview" class="hidden">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Nomor RM yang ditemukan:</div>
+                        <div id="extractedTags" class="flex flex-wrap gap-2 mb-3"></div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button onclick="extractFromMessage()"
+                            class="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2 rounded-md text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">
+                            Ekstrak Nomor RM
+                        </button>
+                        <button onclick="extractAndSearch()"
+                            class="bg-violet-100 hover:bg-violet-200 text-violet-700 px-5 py-2 rounded-md text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">
+                            Ekstrak &amp; Cari Langsung
+                        </button>
+                        <button onclick="clearExtractor()" class="text-xs text-slate-400 hover:text-slate-600 ml-auto">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Search Input -->
             <div class="p-5">
-                <label for="searchRM" class="block text-sm font-semibold text-slate-700 mb-3">2. Cari Nomor Rekam Medis (Kolom C)</label>
+                <label for="searchRM" class="block text-sm font-semibold text-slate-700 mb-3">3. Cari Nomor Rekam Medis (Kolom C)</label>
                 <div class="flex flex-col space-y-3">
-                    <textarea id="searchRM" rows="3" placeholder="Masukkan satu atau banyak Nomor RM...&#10;(Pisahkan dengan baris baru, spasi, atau copy-paste langsung dari Excel)" 
+                    <textarea id="searchRM" rows="3"
+                        placeholder="Insert the RM number here..."
                         class="w-full rounded-md border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm resize-y"
                         onkeypress="handleKeyPress(event)"
                     ></textarea>
-                    
+
                     <div class="flex justify-between items-center">
                         <div id="errorMsg" class="text-sm text-red-500 font-medium hidden"></div>
-                        <button onclick="searchData()" 
+                        <button onclick="searchData()"
                             class="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-md font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap">
                             Cari Semua Data
                         </button>
@@ -66,14 +121,12 @@
             </div>
         </div>
 
-        <!-- Step 3: Result Container (For multiple cards) -->
+        <!-- Step 3: Result Container -->
         <div id="resultContainer" class="hidden">
             <div class="flex items-center justify-between mb-4 px-1 border-b border-slate-200 pb-2">
                 <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">Hasil Pencarian</h3>
                 <span id="resultSummary" class="text-sm font-bold text-slate-600"></span>
             </div>
-            
-            <!-- Dynamic Patient Cards will be injected here -->
             <div id="resultsList" class="space-y-6"></div>
         </div>
 
@@ -82,200 +135,349 @@
         </div>
     </div>
 
-    <!-- Application Logic -->
+    <!-- =====================================================================
+         WORKER SCRIPT (runs off the main thread — UI stays responsive)
+         Embedded as a Blob so we don't need a separate worker.js file.
+    ====================================================================== -->
+    <script id="workerScript" type="javascript/worker">
+        // Import SheetJS inside the worker
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+        // Column indices (same as main thread constants)
+        const COL_NO_PA       = 1;  // B
+        const COL_NO_RM       = 2;  // C
+        const COL_NAMA_PASIEN = 4;  // E
+        const COL_WAKTU       = 6;  // G
+        const COL_RESIDEN     = 28; // AC
+        const COL_KONSULEN    = 29; // AD
+
+        self.onmessage = function(e) {
+            const { arrayBuffer, fileName } = e.data;
+
+            try {
+                // ── FIX 1: No cellDates — ~2-5x faster parse ──────────────
+                const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                // ── FIX 2: Limit column range — less memory ────────────────
+                // Only cap the END column at AD(29). Do NOT change the start column —
+                // sheet_to_json re-indexes from 0 at whatever column the range starts,
+                // which would break all COL_* constants if we shifted the start away from A.
+                if (worksheet['!ref']) {
+                    const range = XLSX.utils.decode_range(worksheet['!ref']);
+                    range.e.c = Math.min(range.e.c, COL_KONSULEN);   // end at AD (index 29)
+                    worksheet['!ref'] = XLSX.utils.encode_range(range);
+                }
+
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+
+                // ── FIX 3: Extract only needed fields + build index in worker ──
+                // Returns a compact array of objects instead of full rows,
+                // and an index Map keyed by lowercased RM number.
+                const indexMap = {}; // plain object — transferable-friendly
+
+                for (let i = 0; i < rawRows.length; i++) {
+                    const row = rawRows[i];
+                    const cellC = row[COL_NO_RM];
+                    if (cellC == null) continue;
+
+                    const rmKey = String(cellC).trim().toLowerCase();
+                    if (!rmKey) continue;
+
+                    const record = {
+                        rm:       String(cellC).trim(),
+                        nomorPA:  row[COL_NO_PA]       != null ? String(row[COL_NO_PA]).trim()       : '-',
+                        nama:     row[COL_NAMA_PASIEN]  != null ? String(row[COL_NAMA_PASIEN]).trim()  : 'TIDAK DIKETAHUI',
+                        waktu:    row[COL_WAKTU]        != null ? row[COL_WAKTU]                       : null,
+                        residen:  row[COL_RESIDEN]      != null ? String(row[COL_RESIDEN]).trim()      : '-',
+                        konsulen: row[COL_KONSULEN]     != null ? String(row[COL_KONSULEN]).trim()     : '-',
+                    };
+
+                    if (!indexMap[rmKey]) indexMap[rmKey] = [];
+                    indexMap[rmKey].push(record);
+                }
+
+                self.postMessage({ ok: true, fileName, indexMap, rowCount: rawRows.length });
+
+            } catch (err) {
+                self.postMessage({ ok: false, fileName, error: err.message });
+            }
+        };
+    </script>
+
+    <!-- =====================================================================
+         MAIN APPLICATION SCRIPT
+    ====================================================================== -->
     <script>
-        let excelData =[];
+        // ── Global state ───────────────────────────────────────────────────
+        // masterIndex: Map<rmLower, record[]>  — merged from all uploaded files
+        let masterIndex = new Map();
+        let totalRowsLoaded = 0;
 
-        // --- KONFIGURASI KOLOM (A=0, B=1, C=2, D=3, E=4, dst) ---
-        const COL_NO_PA = 1;       // Kolom B
-        const COL_NO_RM = 2;       // Kolom C
-        const COL_NAMA_PASIEN = 4; // Kolom E (Telah diperbarui!)
-        const COL_WAKTU = 6;       // Kolom G
-        const COL_RESIDEN = 28;    // Kolom AC
-        const COL_KONSULEN = 29;   // Kolom AD
+        // Spawn one persistent worker from the inline script above
+        const workerBlob = new Blob(
+            [document.getElementById('workerScript').textContent],
+            { type: 'text/javascript' }
+        );
+        const workerURL = URL.createObjectURL(workerBlob);
 
-        // Listen for multiple file uploads
+        // ── Helper: format Excel serial date or string date ───────────────
+        function formatDate(waktu) {
+            if (waktu == null || waktu === '') return { display: '-', raw: 0 };
+
+            // JS Date object (shouldn't happen without cellDates, but just in case)
+            if (waktu instanceof Date) {
+                return { display: formatDateCompact(waktu), raw: waktu.getTime() };
+            }
+
+            // Excel serial number
+            if (typeof waktu === 'number') {
+                // Excel epoch: Dec 30 1899. Adjust for 1-Jan-1900 leap-year bug.
+                const d = new Date(Math.round((waktu - 25569) * 86400 * 1000));
+                return { display: formatDateCompact(d), raw: d.getTime() };
+            }
+
+            // String date "DD-MM-YYYY HH:MM:SS"
+            const str = String(waktu).trim();
+            const match = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2})[:.](\d{1,2})(?:[:.](\d{1,2}))?)?/);
+            if (match) {
+                const d  = parseInt(match[1], 10);
+                const m  = parseInt(match[2], 10) - 1;
+                const y  = parseInt(match[3], 10);
+                const hr = match[4] ? parseInt(match[4], 10) : 0;
+                const mn = match[5] ? parseInt(match[5], 10) : 0;
+                const sc = match[6] ? parseInt(match[6], 10) : 0;
+                const dt = new Date(y, m, d, hr, mn, sc);
+                return { display: formatDateCompact(dt), raw: dt.getTime() };
+            }
+
+            const parsed = Date.parse(str);
+            return { display: str, raw: isNaN(parsed) ? 0 : parsed };
+        }
+
+        function formatDateCompact(dateObj) {
+            const pad = n => n.toString().padStart(2, '0');
+            return `${pad(dateObj.getDate())}-${pad(dateObj.getMonth()+1)}-${dateObj.getFullYear()} ` +
+                   `${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+        }
+
+        // ── File upload handler ───────────────────────────────────────────
         document.getElementById('excelFile').addEventListener('change', async function(e) {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
+            const files = Array.from(e.target.files || []);
+            if (files.length === 0) return;
 
-            const statusBox = document.getElementById('fileStatus');
+            const statusBox  = document.getElementById('fileStatus');
             const statusText = document.getElementById('fileStatusText');
-            
+            const progressList = document.getElementById('progressList');
+
+            // Reset state
             document.getElementById('resultContainer').classList.add('hidden');
             document.getElementById('errorMsg').classList.add('hidden');
             document.getElementById('resultsList').innerHTML = '';
-            
-            statusBox.className = "mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-blue-50 text-blue-700";
-            statusText.innerText = "⏳ Memproses " + files.length + " file, harap tunggu...";
+            masterIndex.clear();
+            totalRowsLoaded = 0;
+
+            // Show loading state
+            statusBox.className  = 'mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-blue-50 text-blue-700';
+            statusText.innerText = `⏳ Memproses ${files.length} file di background...`;
             statusBox.classList.remove('hidden');
-            
-            excelData =[]; 
 
-            try {
-                const readPromises = Array.from(files).map(file => {
-                    return new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = function(event) {
-                            try {
-                                const data = new Uint8Array(event.target.result);
-                                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                                resolve(json);
-                            } catch (err) {
-                                reject(err);
+            // Build per-file progress rows
+            progressList.innerHTML = '';
+            progressList.classList.remove('hidden');
+            const progressEls = files.map((file, i) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'text-xs text-slate-500';
+                wrap.innerHTML = `
+                    <div class="flex justify-between mb-0.5">
+                        <span class="truncate max-w-xs">${file.name}</span>
+                        <span id="pLabel${i}" class="ml-2 shrink-0 text-blue-500 font-medium">Menunggu...</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5">
+                        <div id="pBar${i}" class="bg-blue-400 h-1.5 rounded-full progress-bar-animated transition-all" style="width:0%"></div>
+                    </div>`;
+                progressList.appendChild(wrap);
+                return { bar: document.getElementById(`pBar${i}`), label: document.getElementById(`pLabel${i}`) };
+            });
+
+            // ── Process each file with a dedicated worker ─────────────────
+            let completedCount = 0;
+            let errorCount     = 0;
+
+            const filePromises = files.map((file, i) => {
+                return new Promise(resolve => {
+                    // Animate bar to "reading" state
+                    progressEls[i].bar.style.width   = '30%';
+                    progressEls[i].label.innerText   = 'Membaca...';
+
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        // Show "parsing" state
+                        progressEls[i].bar.style.width   = '60%';
+                        progressEls[i].label.innerText   = 'Memproses...';
+
+                        // Spawn worker
+                        const worker = new Worker(workerURL);
+
+                        worker.onmessage = function(msg) {
+                            worker.terminate();
+                            const { ok, indexMap, rowCount, error } = msg.data;
+
+                            if (ok) {
+                                // ── FIX 4: Merge index with push (not concat) ──
+                                for (const [rmKey, records] of Object.entries(indexMap)) {
+                                    if (masterIndex.has(rmKey)) {
+                                        const existing = masterIndex.get(rmKey);
+                                        for (const r of records) existing.push(r);
+                                    } else {
+                                        masterIndex.set(rmKey, [...records]);
+                                    }
+                                }
+                                totalRowsLoaded += rowCount;
+                                completedCount++;
+
+                                progressEls[i].bar.style.width          = '100%';
+                                progressEls[i].bar.classList.remove('progress-bar-animated');
+                                progressEls[i].bar.classList.add('bg-emerald-400');
+                                progressEls[i].label.innerText          = `✓ ${rowCount.toLocaleString()} baris`;
+                                progressEls[i].label.className          = 'ml-2 shrink-0 text-emerald-600 font-medium';
+                            } else {
+                                errorCount++;
+                                progressEls[i].bar.style.width          = '100%';
+                                progressEls[i].bar.classList.remove('progress-bar-animated', 'bg-blue-400');
+                                progressEls[i].bar.classList.add('bg-red-400');
+                                progressEls[i].label.innerText          = '✖ Gagal';
+                                progressEls[i].label.className          = 'ml-2 shrink-0 text-red-500 font-medium';
+                                console.error(`Worker error (${file.name}):`, error);
                             }
+                            resolve();
                         };
-                        reader.onerror = reject;
-                        reader.readAsArrayBuffer(file);
-                    });
+
+                        worker.onerror = function(err) {
+                            worker.terminate();
+                            errorCount++;
+                            progressEls[i].label.innerText = '✖ Error';
+                            progressEls[i].label.className = 'ml-2 shrink-0 text-red-500 font-medium';
+                            console.error(err);
+                            resolve();
+                        };
+
+                        // Transfer buffer to worker (zero-copy)
+                        const buffer = ev.target.result;
+                        worker.postMessage({ arrayBuffer: buffer, fileName: file.name }, [buffer]);
+                    };
+
+                    reader.onerror = () => {
+                        errorCount++;
+                        progressEls[i].label.innerText = '✖ Read error';
+                        resolve();
+                    };
+
+                    reader.readAsArrayBuffer(file);
                 });
+            });
 
-                const allFilesData = await Promise.all(readPromises);
-                
-                for (let data of allFilesData) {
-                    excelData = excelData.concat(data);
-                }
+            await Promise.all(filePromises);
 
-                statusBox.className = "mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-emerald-50 text-emerald-700";
-                statusText.innerText = `✓ Berhasil memuat ${files.length} file (Total ${excelData.length} baris data).`;
-
-            } catch (err) {
-                statusBox.className = "mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-red-50 text-red-700";
-                statusText.innerText = "✖ Gagal membaca salah satu file. Pastikan formatnya benar.";
-                console.error(err);
+            // Final status
+            if (errorCount === 0) {
+                statusBox.className  = 'mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-emerald-50 text-emerald-700';
+                statusText.innerText = `✓ Berhasil memuat ${completedCount} file — ${totalRowsLoaded.toLocaleString()} baris.`;
+            } else {
+                statusBox.className  = 'mt-3 px-4 py-2.5 rounded-md text-sm font-medium bg-orange-50 text-orange-700';
+                statusText.innerText = `⚠ ${completedCount} file berhasil, ${errorCount} file gagal.`;
             }
         });
 
-        // Allow searching by pressing 'Ctrl + Enter' or 'Cmd + Enter' in textarea
+        // ── Search handler ────────────────────────────────────────────────
         function handleKeyPress(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                searchData();
-            }
-        }
-
-        // Format Date exactly like "19-02-2026 11:30:03"
-        function formatDateCompact(dateObj) {
-            const pad = (n) => n.toString().padStart(2, '0');
-            return `${pad(dateObj.getDate())}-${pad(dateObj.getMonth() + 1)}-${dateObj.getFullYear()} ${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') searchData();
         }
 
         function searchData() {
-            const searchInput = document.getElementById('searchRM').value.trim();
+            const searchInput     = document.getElementById('searchRM').value.trim();
             const resultContainer = document.getElementById('resultContainer');
-            const resultsList = document.getElementById('resultsList');
-            const resultSummary = document.getElementById('resultSummary');
-            
-            if (excelData.length === 0) {
-                showError("Silakan upload file Excel terlebih dahulu.");
-                return;
-            }
-            if (!searchInput) {
-                showError("Masukkan minimal satu Nomor Rekam Medis.");
-                return;
-            }
+            const resultsList     = document.getElementById('resultsList');
+            const resultSummary   = document.getElementById('resultSummary');
+
+            if (masterIndex.size === 0) { showError('Silakan upload file Excel terlebih dahulu.'); return; }
+            if (!searchInput)           { showError('Masukkan minimal satu Nomor Rekam Medis.');   return; }
 
             hideError();
             resultsList.innerHTML = '';
 
-            // Split input by newlines, spaces, or commas, and remove empty entries
-            const searchTermsArray = searchInput.split(/[\s,]+/).filter(term => term.trim() !== '');
-            const searchTermsSet = new Set(searchTermsArray.map(term => term.toLowerCase()));
+            // Normalize RM: remove dots (02.34.53.39 → 02345339) and pad 7-digit to 8-digit (2338951 → 02338951)
+            const normalizeRM = (raw) => {
+                let rm = raw.replace(/\./g, '');          // strip dots
+                if (/^\d{7}$/.test(rm)) rm = '0' + rm;   // pad 7-digit
+                return rm.toLowerCase();
+            };
 
-            let groupedResults = {};
+            const searchTermsSet = new Set(
+                searchInput.split(/[\s,]+/).filter(t => t.trim()).map(normalizeRM)
+            );
 
-            // Loop through merged array
-            for (let i = 0; i < excelData.length; i++) {
-                const row = excelData[i];
-                let cellC = row[COL_NO_RM]; 
-                
-                if (cellC != null) {
-                    let rmString = String(cellC).trim();
-                    let rmLower = rmString.toLowerCase();
+            const groupedResults = {};
 
-                    // If this row matches one of our searched RM numbers
-                    if (searchTermsSet.has(rmLower)) {
-                        
-                        const namaPasien = row[COL_NAMA_PASIEN] != null ? String(row[COL_NAMA_PASIEN]).trim() : "TIDAK DIKETAHUI";
-                        const nomorPA = row[COL_NO_PA] != null ? String(row[COL_NO_PA]).trim() : "-";
-                        const timestampCell = row[COL_WAKTU];
-                        const residen = row[COL_RESIDEN] != null ? String(row[COL_RESIDEN]).trim() : "-";
-                        const konsulen = row[COL_KONSULEN] != null ? String(row[COL_KONSULEN]).trim() : "-";
+            // ── FIX 5: O(1) Map lookup — no linear scan ───────────────────
+            for (const rmLower of searchTermsSet) {
+                const rows = masterIndex.get(rmLower);
+                if (!rows) continue;
 
-                        let rawDateForSort = 0;
-                        let displayDate = "-";
+                for (const rec of rows) {
+                    const { display, raw } = formatDate(rec.waktu);
 
-                        // Date Parsing Logic
-                        if (timestampCell != null && timestampCell !== "") {
-                            if (timestampCell instanceof Date) {
-                                rawDateForSort = timestampCell.getTime();
-                                displayDate = formatDateCompact(timestampCell);
-                            } else if (typeof timestampCell === 'number') {
-                                let d = new Date(Math.round((timestampCell - 25569) * 86400 * 1000));
-                                rawDateForSort = d.getTime();
-                                displayDate = formatDateCompact(d);
-                            } else {
-                                displayDate = String(timestampCell).trim(); 
-                                let match = displayDate.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2})[:.](\d{1,2})(?:[:.](\d{1,2}))?)?/);
-                                if (match) {
-                                    let d = parseInt(match[1], 10);
-                                    let m = parseInt(match[2], 10) - 1; 
-                                    let y = parseInt(match[3], 10);
-                                    let hr = match[4] ? parseInt(match[4], 10) : 0;
-                                    let min = match[5] ? parseInt(match[5], 10) : 0;
-                                    let sec = match[6] ? parseInt(match[6], 10) : 0;
-                                    rawDateForSort = new Date(y, m, d, hr, min, sec).getTime();
-                                } else {
-                                    let parsed = Date.parse(displayDate);
-                                    if (!isNaN(parsed)) rawDateForSort = parsed;
-                                }
-                            }
-                        }
-
-                        // Initialize patient group if it doesn't exist
-                        if (!groupedResults[rmLower]) {
-                            groupedResults[rmLower] = {
-                                originalRM: rmString, 
-                                nama: namaPasien,
-                                records:[]
-                            };
-                        }
-
-                        // Add record to patient group
-                        groupedResults[rmLower].records.push({
-                            nomorPA: nomorPA,
-                            residen: residen,
-                            konsulen: konsulen,
-                            rawDate: rawDateForSort,
-                            displayDate: displayDate
-                        });
+                    if (!groupedResults[rmLower]) {
+                        groupedResults[rmLower] = { originalRM: rec.rm, nama: rec.nama, records: [] };
                     }
+                    groupedResults[rmLower].records.push({
+                        nomorPA:     rec.nomorPA,
+                        residen:     rec.residen,
+                        konsulen:    rec.konsulen,
+                        rawDate:     raw,
+                        displayDate: display,
+                    });
                 }
             }
 
             const patientsFound = Object.keys(groupedResults).length;
-
             if (patientsFound === 0) {
                 resultContainer.classList.add('hidden');
-                showError("Tidak ada data yang ditemukan untuk seluruh Nomor RM tersebut.");
+                showError('Tidak ada data yang ditemukan untuk seluruh Nomor RM tersebut.');
                 return;
             }
 
             let totalRecordsFound = 0;
             resultContainer.classList.remove('hidden');
 
+            // ── Build result cards ─────────────────────────────────────────
+            const fragment = document.createDocumentFragment(); // batch DOM inserts
+
             Object.values(groupedResults).forEach(patient => {
-                // SORTING: Oldest first inside the specific patient's array
                 patient.records.sort((a, b) => a.rawDate - b.rawDate);
                 totalRecordsFound += patient.records.length;
 
-                // Build Patient Card
                 const card = document.createElement('div');
-                card.className = "bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden";
-                
-                // Patient Header
-                let htmlContent = `
+                card.className = 'bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden';
+
+                const rows = patient.records.map((match, index) => `
+                    <tr class="hover:bg-slate-50/80 transition-colors group">
+                        <td class="px-5 py-4 text-sm font-bold text-slate-300 text-center group-hover:text-blue-500">${index + 1}</td>
+                        <td class="px-5 py-4 text-sm text-slate-600 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                ${match.displayDate}
+                            </div>
+                        </td>
+                        <td class="px-5 py-4 text-sm font-bold text-slate-800 whitespace-nowrap">${match.nomorPA}</td>
+                        <td class="px-5 py-4 text-sm font-medium text-slate-700">${match.residen}</td>
+                        <td class="px-5 py-4 text-sm text-slate-600">${match.konsulen}</td>
+                    </tr>`).join('');
+
+                card.innerHTML = `
                     <div class="bg-blue-50/60 px-6 py-4 border-b border-blue-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                         <div>
                             <div class="text-xs text-blue-500 font-bold uppercase tracking-wider mb-0.5">NAMA PASIEN (KOLOM E)</div>
@@ -286,10 +488,6 @@
                             <div class="text-lg font-bold text-blue-700 leading-none">${patient.originalRM}</div>
                         </div>
                     </div>
-                `;
-
-                // Patient Records Table
-                htmlContent += `
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse min-w-[700px]">
                             <thead>
@@ -301,64 +499,118 @@
                                     <th class="px-5 py-3 font-semibold">Konsulen (Kolom AD)</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-100">
-                `;
-
-                // Add rows
-                patient.records.forEach((match, index) => {
-                    htmlContent += `
-                        <tr class="hover:bg-slate-50/80 transition-colors group">
-                            <td class="px-5 py-4 text-sm font-bold text-slate-300 text-center group-hover:text-blue-500">${index + 1}</td>
-                            <td class="px-5 py-4 text-sm text-slate-600 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    ${match.displayDate}
-                                </div>
-                            </td>
-                            <td class="px-5 py-4 text-sm font-bold text-slate-800 whitespace-nowrap">${match.nomorPA}</td>
-                            <td class="px-5 py-4 text-sm font-medium text-slate-700">${match.residen}</td>
-                            <td class="px-5 py-4 text-sm text-slate-600">${match.konsulen}</td>
-                        </tr>
-                    `;
-                });
-
-                htmlContent += `
-                            </tbody>
+                            <tbody class="divide-y divide-slate-100">${rows}</tbody>
                         </table>
-                    </div>
-                `;
-                
-                card.innerHTML = htmlContent;
-                resultsList.appendChild(card);
+                    </div>`;
+
+                fragment.appendChild(card);
             });
 
-            // Update Header Summary Status
-            resultSummary.innerHTML = `<span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">${patientsFound} Pasien Ditemukan</span> &nbsp;<span class="text-slate-400 font-medium">(${totalRecordsFound} total riwayat)</span>`;
-            
-            // Generate warning card if any searched RM was not found
+            // Warn about unfound RMs
             if (patientsFound < searchTermsSet.size) {
-                const foundRMs = Object.keys(groupedResults);
+                const foundRMs   = Object.keys(groupedResults);
                 const unfoundRMs = Array.from(searchTermsSet).filter(rm => !foundRMs.includes(rm));
-                
-                if(unfoundRMs.length > 0) {
+                if (unfoundRMs.length > 0) {
                     const warningCard = document.createElement('div');
-                    warningCard.className = "bg-orange-50 text-orange-700 border border-orange-200 p-4 rounded-xl shadow-sm text-sm font-medium flex items-start mt-4";
+                    warningCard.className = 'bg-orange-50 text-orange-700 border border-orange-200 p-4 rounded-xl shadow-sm text-sm font-medium flex items-start mt-4';
                     warningCard.innerHTML = `
-                        <svg class="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <svg class="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
                         <div>
                             <div class="font-bold mb-1">Beberapa Nomor RM tidak ditemukan di file Excel:</div>
                             <div class="font-mono text-xs opacity-90 break-words">${unfoundRMs.join(', ')}</div>
-                        </div>
-                    `;
-                    resultsList.appendChild(warningCard);
+                        </div>`;
+                    fragment.appendChild(warningCard);
                 }
+            }
+
+            // Single DOM write — avoids reflow on every card
+            resultsList.appendChild(fragment);
+
+            resultSummary.innerHTML = `
+                <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">${patientsFound} Pasien Ditemukan</span>
+                &nbsp;<span class="text-slate-400 font-medium">(${totalRecordsFound} total riwayat)</span>`;
+        }
+
+        // ── MDT Extractor ─────────────────────────────────────────────────
+        function toggleExtractor() {
+            const panel  = document.getElementById('extractorPanel');
+            const btn    = document.getElementById('extractorToggle');
+            const hidden = panel.classList.toggle('hidden');
+            btn.innerText = hidden ? 'Tampilkan' : 'Sembunyikan';
+        }
+
+        function extractRMsFromText(text) {
+            // Match all three RM formats:
+            //   1. Dotted  : 02.34.53.39  (XX.XX.XX.XX)
+            //   2. 8-digit : 02345339
+            //   3. 7-digit : 2338951
+            // Word boundaries prevent matching digits inside longer numbers (e.g. years).
+            const pattern = /\b\d{2}\.\d{2}\.\d{2}\.\d{2}\b|\b\d{8}\b|\b\d{7}\b/g;
+            const matches = [...text.matchAll(pattern)].map(m => m[0]);
+
+            // Deduplicate while preserving order; normalize dots away for dedup key
+            // so "02.34.53.39" and "02345339" aren't treated as two different entries.
+            const seen = new Set();
+            return matches.filter(rm => {
+                const key = rm.replace(/\./g, '');
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        function extractFromMessage() {
+            const text = document.getElementById('mdtMessage').value;
+            const rms  = extractRMsFromText(text);
+
+            const preview = document.getElementById('extractPreview');
+            const tags    = document.getElementById('extractedTags');
+            tags.innerHTML = '';
+
+            if (rms.length === 0) {
+                preview.classList.add('hidden');
+                showError('Tidak ditemukan nomor RM berformat XX.XX.XX.XX dalam pesan.');
+                return;
+            }
+
+            hideError();
+
+            // Render tag pills
+            rms.forEach(rm => {
+                const tag = document.createElement('span');
+                tag.className = 'inline-flex items-center bg-violet-100 text-violet-800 text-xs font-mono font-semibold px-2.5 py-1 rounded-full border border-violet-200';
+                tag.innerText = rm;
+                tags.appendChild(tag);
+            });
+            preview.classList.remove('hidden');
+
+            // Populate search textarea with normalized RMs
+            document.getElementById('searchRM').value = rms.join('\n');
+        }
+
+        function extractAndSearch() {
+            extractFromMessage();
+            // Only search if extraction found something (searchRM will be populated)
+            if (document.getElementById('searchRM').value.trim()) {
+                searchData();
             }
         }
 
+        function clearExtractor() {
+            document.getElementById('mdtMessage').value = '';
+            document.getElementById('extractPreview').classList.add('hidden');
+            document.getElementById('extractedTags').innerHTML = '';
+            document.getElementById('searchRM').value = '';
+            hideError();
+        }
+
         function showError(msg) {
-            const errorEl = document.getElementById('errorMsg');
-            errorEl.innerText = msg;
-            errorEl.classList.remove('hidden');
+            const el = document.getElementById('errorMsg');
+            el.innerText = msg;
+            el.classList.remove('hidden');
         }
 
         function hideError() {
